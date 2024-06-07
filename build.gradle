@@ -8,10 +8,11 @@ plugins {
 
 group = 'net.coreprotect'
 String projectVersion = '22.4'
-String projectBranch = ''
+String projectBranch = 'development'
 version = projectVersion // `version` might be modified, we don't always want that (e.g. plugin.yml)
 description = 'Provides block protection for your server.'
-sourceCompatibility = '21'
+sourceCompatibility = '17'
+compileJava.options.encoding = 'UTF-8'
 
 if (System.getenv("BUILD_NUMBER") != null) {
     // Being built in Jenkins, append Build ID
@@ -35,6 +36,7 @@ dependencies {
     compileOnly 'io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT'
     implementation 'org.bstats:bstats-bukkit-lite:1.8'
     implementation 'com.zaxxer:HikariCP:5.0.1'
+    implementation fileTree('lib') {include '*.jar'}
 }
 
 jar {

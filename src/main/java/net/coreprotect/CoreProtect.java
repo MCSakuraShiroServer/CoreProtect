@@ -115,13 +115,6 @@ public final class CoreProtect extends JavaPlugin {
 
             Consumer.startConsumer();
 
-            // Enabling bStats
-            try {
-                new MetricsLite(this, 2876);
-            }
-            catch (Exception e) {
-                // Failed to connect to bStats server or something else went wrong.
-            }
         }
         else {
             Chat.console(Phrase.build(Phrase.ENABLE_FAILED, ConfigHandler.EDITION_NAME));

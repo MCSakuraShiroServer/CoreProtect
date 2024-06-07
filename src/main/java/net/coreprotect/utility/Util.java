@@ -1,56 +1,5 @@
 package net.coreprotect.utility;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
-
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.World;
-import org.bukkit.block.Banner;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Chest;
-import org.bukkit.block.CommandBlock;
-import org.bukkit.block.Jukebox;
-import org.bukkit.block.ShulkerBox;
-import org.bukkit.block.banner.Pattern;
-import org.bukkit.block.data.BlockData;
-import org.bukkit.block.data.Waterlogged;
-import org.bukkit.command.ConsoleCommandSender;
-import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.configuration.serialization.ConfigurationSerialization;
-import org.bukkit.configuration.serialization.DelegateDeserialization;
-import org.bukkit.entity.EntityType;
-import org.bukkit.entity.ItemFrame;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
-import org.bukkit.inventory.BlockInventoryHolder;
-import org.bukkit.inventory.EntityEquipment;
-import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.plugin.Plugin;
-import org.bukkit.util.io.BukkitObjectOutputStream;
-
 import net.coreprotect.CoreProtect;
 import net.coreprotect.bukkit.BukkitAdapter;
 import net.coreprotect.config.Config;
@@ -63,6 +12,56 @@ import net.coreprotect.thread.CacheHandler;
 import net.coreprotect.thread.Scheduler;
 import net.coreprotect.utility.serialize.ItemMetaHandler;
 import net.coreprotect.worldedit.CoreProtectEditSessionEvent;
+import net.kyori.adventure.nbt.api.BinaryTagHolder;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TranslatableComponent;
+import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.kyori.adventure.translation.GlobalTranslator;
+import net.kyori.adventure.translation.Translator;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.block.*;
+import org.bukkit.block.banner.Pattern;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Waterlogged;
+import org.bukkit.command.ConsoleCommandSender;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.configuration.serialization.ConfigurationSerialization;
+import org.bukkit.configuration.serialization.DelegateDeserialization;
+import org.bukkit.entity.EntityType;
+import org.bukkit.entity.ItemFrame;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.*;
+import org.bukkit.inventory.meta.BlockStateMeta;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.util.io.BukkitObjectOutputStream;
+import org.ricetea.barleyteaapi.api.internal.nms.INMSItemHelper;
+import org.ricetea.barleyteaapi.api.item.helper.ItemHelper;
+import org.ricetea.barleyteaapi.api.item.render.ItemRenderer;
+import org.ricetea.barleyteaapi.api.item.render.util.ItemRenderHelper;
+import org.ricetea.utils.Box;
+import org.ricetea.utils.Converters;
+import org.ricetea.utils.ObjectUtil;
+import org.ricetea.utils.WithFlag;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.MessageFormat;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 public class Util extends Queue {
 
@@ -276,26 +275,140 @@ public class Util extends Queue {
 
         ItemStack item = new ItemStack(Util.getType(type), amount);
         item = (ItemStack) Rollback.populateItemStack(item, metadata)[2];
-        String displayName = item.hasItemMeta() && item.getItemMeta().hasDisplayName() ? item.getItemMeta().getDisplayName() : "";
-        StringBuilder message = new StringBuilder(Color.ITALIC + displayName + Color.GREY);
-
-        List<String> enchantments = ItemMetaHandler.getEnchantments(item, displayName);
-        for (String enchantment : enchantments) {
-            if (message.length() > 0) {
+        ItemRenderHelper.setLastRenderer(item, ItemRenderer.getDefault());
+        item = ItemHelper.render(item).obj();
+        item = ObjectUtil.safeMap(applyTranslateFallbacks(GlobalTranslator.translator(), item, Locale.getDefault()), WithFlag::obj);
+        if (item == null)
+            return "";
+        var serializer = LegacyComponentSerializer.legacySection();
+        String displayName = ObjectUtil.safeMap(item.getItemMeta(), ItemMeta::getDisplayName);
+        List<Component> lore = item.lore();
+        List<String> loreStringList;
+        if (lore == null) {
+            loreStringList = null;
+        } else {
+            loreStringList = lore.stream()
+                    .map(serializer::serialize)
+                    .toList();
+        }
+        if (displayName == null || displayName.isBlank()) {
+            if (lore == null)
+                return "";
+        }
+        StringBuilder message = new StringBuilder(displayName == null ?
+                serializer.serialize(Component.translatable(Objects.requireNonNull(item.getType().getItemTranslationKey()))) :
+                displayName);
+        if (loreStringList != null) {
+            loreStringList.forEach(val -> {
                 message.append("\n");
-            }
-            message.append(enchantment);
-        }
-
-        if (!displayName.isEmpty()) {
-            message.insert(0, enchantments.isEmpty() ? Color.WHITE : Color.AQUA);
-        }
-        else if (!enchantments.isEmpty()) {
-            String name = Util.capitalize(item.getType().name().replace("_", " "), true);
-            message.insert(0, Color.AQUA + Color.ITALIC + name);
+                message.append(val);
+            });
         }
 
         return message.toString();
+    }
+
+    @Nullable
+    private static WithFlag<ItemStack> applyTranslateFallbacks(@Nonnull Translator translator, @Nullable ItemStack itemStack,
+                                                               @Nonnull Locale locale) {
+        if (itemStack == null)
+            return null;
+        ItemMeta meta = itemStack.getItemMeta();
+        if (meta == null)
+            return new WithFlag<>(itemStack, false);
+        boolean isDirty = false;
+        Component displayName = ObjectUtil.tryMapSilently(meta::displayName);
+        if (displayName != null) {
+            meta.displayName(applyTranslateFallbacks(translator, displayName, locale));
+            isDirty = true;
+        }
+        List<Component> lore = ObjectUtil.tryMapSilently(meta::lore);
+        if (lore != null) {
+            meta.lore(lore.stream()
+                    .map(loreLine -> applyTranslateFallbacks(translator, loreLine, locale))
+                    .toList());
+            isDirty = true;
+        }
+        if (meta instanceof BlockStateMeta blockMeta) {
+            if (blockMeta.getBlockState() instanceof ShulkerBox shulkerBox) {
+                var inventory = shulkerBox.getInventory();
+                Box<Boolean> flag = Box.box(false);
+                for (var iterator = inventory.iterator(); iterator.hasNext(); ) {
+                    WithFlag<ItemStack> result = applyTranslateFallbacks(translator, iterator.next(), locale);
+                    if (result != null && result.flag()) {
+                        flag.set(true);
+                        iterator.set(result.obj());
+                    }
+                }
+                if (!isDirty)
+                    isDirty = ObjectUtil.letNonNull(flag.get(), false);
+                blockMeta.setBlockState(shulkerBox);
+            }
+        }
+        if (isDirty) {
+            itemStack.setItemMeta(meta);
+        }
+        return new WithFlag<>(itemStack, isDirty);
+    }
+
+    @Nullable
+    private static Component applyTranslateFallbacks(@Nonnull Translator translator, @Nullable Component component,
+                                                     @Nonnull Locale locale) {
+        if (component == null)
+            return null;
+        Component result;
+        if (component instanceof TranslatableComponent translatableComponent) {
+            TranslatableComponent translatableResult = translatableComponent;
+            if (translatableComponent.fallback() == null) {
+                MessageFormat format = translator.translate(translatableComponent.key(), locale);
+                if (format != null)
+                    translatableResult = translatableResult.fallback(Converters.toStringFormat(format));
+            }
+            translatableResult = translatableResult
+                    .args(translatableResult.args()
+                            .stream()
+                            .map(arg -> applyTranslateFallbacks(translator, arg, locale))
+                            .toList());
+            result = translatableResult;
+        } else {
+            result = component;
+        }
+        HoverEvent<?> hoverEvent = result.hoverEvent();
+        if (hoverEvent != null) {
+            result = processChatMessageHoverEvents(translator, result, locale);
+        }
+        return result
+                .children(component.children()
+                        .stream()
+                        .map(arg -> applyTranslateFallbacks(translator, arg, locale))
+                        .toList());
+    }
+
+    @Nonnull
+    private static Component processChatMessageHoverEvents(@Nonnull Translator translator,
+                                                           @Nonnull Component component, @Nonnull Locale locale) {
+        HoverEvent<?> hoverEvent = component.hoverEvent();
+        if (hoverEvent != null && hoverEvent.value() instanceof HoverEvent.ShowItem showItem) {
+            BinaryTagHolder nbtHolder = showItem.nbt();
+            if (nbtHolder == null)
+                return component;
+            String rawNbt = "{\"id\":\"" + showItem.item() + "\", \"Count\":" + showItem.count() + ", \"tag\": "
+                    + nbtHolder.string() + "}";
+            INMSItemHelper helper = Bukkit.getServicesManager().load(INMSItemHelper.class);
+            if (helper != null) {
+                ItemStack itemStack = helper.createItemStackFromNbtString(rawNbt);
+                if (itemStack != null) {
+                    var flag = applyTranslateFallbacks(translator, itemStack, locale);
+                    if (flag != null && flag.flag()) {
+                        itemStack = flag.obj();
+                        return itemStack.displayName()
+                                .hoverEvent(itemStack.asHoverEvent())
+                                .children(component.children());
+                    }
+                }
+            }
+        }
+        return component;
     }
 
     public static String createTooltip(String phrase, String tooltip) {
