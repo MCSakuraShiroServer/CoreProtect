@@ -294,10 +294,10 @@ public class Util extends Queue {
         if (displayName == null || displayName.isBlank()) {
             if (lore == null)
                 return "";
+            displayName = serializer.serialize(Component.translatable(
+                    Objects.requireNonNull(item.getType().getItemTranslationKey())));
         }
-        StringBuilder message = new StringBuilder(displayName == null ?
-                serializer.serialize(Component.translatable(Objects.requireNonNull(item.getType().getItemTranslationKey()))) :
-                displayName);
+        StringBuilder message = new StringBuilder(displayName);
         if (loreStringList != null) {
             loreStringList.forEach(val -> {
                 message.append("\n");
@@ -384,19 +384,15 @@ public class Util extends Queue {
                         .toList());
     }
 
+    @SuppressWarnings("UnstableApiUsage")
     @Nonnull
     private static Component processChatMessageHoverEvents(@Nonnull Translator translator,
                                                            @Nonnull Component component, @Nonnull Locale locale) {
         HoverEvent<?> hoverEvent = component.hoverEvent();
         if (hoverEvent != null && hoverEvent.value() instanceof HoverEvent.ShowItem showItem) {
-            BinaryTagHolder nbtHolder = showItem.nbt();
-            if (nbtHolder == null)
-                return component;
-            String rawNbt = "{\"id\":\"" + showItem.item() + "\", \"Count\":" + showItem.count() + ", \"tag\": "
-                    + nbtHolder.string() + "}";
             INMSItemHelper helper = Bukkit.getServicesManager().load(INMSItemHelper.class);
             if (helper != null) {
-                ItemStack itemStack = helper.createItemStackFromNbtString(rawNbt);
+                ItemStack itemStack = helper.createItemStackFromShowItem(showItem);
                 if (itemStack != null) {
                     var flag = applyTranslateFallbacks(translator, itemStack, locale);
                     if (flag != null && flag.flag()) {
