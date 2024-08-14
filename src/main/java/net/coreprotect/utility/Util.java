@@ -1,24 +1,28 @@
 package net.coreprotect.utility;
 
-import net.coreprotect.CoreProtect;
-import net.coreprotect.bukkit.BukkitAdapter;
-import net.coreprotect.config.Config;
-import net.coreprotect.config.ConfigHandler;
-import net.coreprotect.consumer.Queue;
-import net.coreprotect.database.rollback.Rollback;
-import net.coreprotect.language.Phrase;
-import net.coreprotect.model.BlockGroup;
-import net.coreprotect.thread.CacheHandler;
-import net.coreprotect.thread.Scheduler;
-import net.coreprotect.utility.serialize.ItemMetaHandler;
-import net.coreprotect.worldedit.CoreProtectEditSessionEvent;
-import net.kyori.adventure.nbt.api.BinaryTagHolder;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.TranslatableComponent;
-import net.kyori.adventure.text.event.HoverEvent;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import net.kyori.adventure.translation.GlobalTranslator;
-import net.kyori.adventure.translation.Translator;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -48,6 +52,8 @@ import org.ricetea.utils.Box;
 import org.ricetea.utils.Converters;
 import org.ricetea.utils.ObjectUtil;
 import org.ricetea.utils.WithFlag;
+import org.jutils.jhardware.HardwareInfo;
+import org.jutils.jhardware.model.ProcessorInfo;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -108,6 +114,19 @@ public class Util extends Queue {
         }
 
         return name;
+    }
+
+    public static ProcessorInfo getProcessorInfo() {
+        ProcessorInfo result = null;
+        try {
+            Configurator.setLevel("com.profesorfalken.jsensors.manager.unix.UnixSensorsManager", Level.OFF);
+            result = HardwareInfo.getProcessorInfo();
+        }
+        catch (Exception e) {
+            // unable to read processor information
+        }
+
+        return result;
     }
 
     public static int getBlockId(Material material) {
@@ -688,16 +707,27 @@ public class Util extends Queue {
             bos.close();
             result = bos.toByteArray();
         }
-        catch (Exception e) {
-            e.printStackTrace();
+        catch (Exception e) { // only display exception on development branch
+            if (!ConfigHandler.EDITION_BRANCH.contains("-dev")) {
+                e.printStackTrace();
+            }
         }
 
         return result;
     }
 
     public static ItemMeta deserializeItemMeta(Class<? extends ItemMeta> itemMetaClass, Map<String, Object> args) {
-        DelegateDeserialization delegate = itemMetaClass.getAnnotation(DelegateDeserialization.class);
-        return (ItemMeta) ConfigurationSerialization.deserializeObject(args, delegate.value());
+        try {
+            DelegateDeserialization delegate = itemMetaClass.getAnnotation(DelegateDeserialization.class);
+            return (ItemMeta) ConfigurationSerialization.deserializeObject(args, delegate.value());
+        }
+        catch (Exception e) { // only display exception on development branch
+            if (!ConfigHandler.EDITION_BRANCH.contains("-dev")) {
+                e.printStackTrace();
+            }
+        }
+
+        return null;
     }
 
     public static <K, V extends Comparable<? super V>> SortedSet<Map.Entry<K, V>> entriesSortedByValues(Map<K, V> map) {
@@ -737,6 +767,33 @@ public class Util extends Queue {
         }
 
         return result;
+    }
+
+    public static ItemStack[] sortContainerState(ItemStack[] array) {
+        if (array == null) {
+            return null;
+        }
+
+        ItemStack[] sorted = new ItemStack[array.length];
+        Map<String, ItemStack> map = new HashMap<>();
+        for (ItemStack itemStack : array) {
+            if (itemStack == null) {
+                continue;
+            }
+
+            map.put(itemStack.toString(), itemStack);
+        }
+
+        ArrayList<String> sortedKeys = new ArrayList<>(map.keySet());
+        Collections.sort(sortedKeys);
+
+        int i = 0;
+        for (String key : sortedKeys) {
+            sorted[i] = map.get(key);
+            i++;
+        }
+
+        return sorted;
     }
 
     /* return true if ItemStack[] contents are identical */
@@ -1026,27 +1083,33 @@ public class Util extends Queue {
     }
 
     public static Material getEntityMaterial(EntityType type) {
-        switch (type) {
-            case ARMOR_STAND:
+        switch (type.name()) {
+            case "ARMOR_STAND":
                 return Material.ARMOR_STAND;
-            case ITEM_FRAME:
+            case "ITEM_FRAME":
                 return Material.ITEM_FRAME;
-            case ENDER_CRYSTAL:
+            case "END_CRYSTAL":
+            case "ENDER_CRYSTAL":
                 return Material.END_CRYSTAL;
-            case ENDER_PEARL:
+            case "ENDER_PEARL":
                 return Material.ENDER_PEARL;
-            case SPLASH_POTION:
+            case "POTION":
+            case "SPLASH_POTION":
                 return Material.SPLASH_POTION;
-            case THROWN_EXP_BOTTLE:
+            case "EXPERIENCE_BOTTLE":
+            case "THROWN_EXP_BOTTLE":
                 return Material.EXPERIENCE_BOTTLE;
-            case TRIDENT:
+            case "TRIDENT":
                 return Material.TRIDENT;
-            case FIREWORK:
+            case "FIREWORK_ROCKET":
+            case "FIREWORK":
                 return Material.FIREWORK_ROCKET;
-            case EGG:
+            case "EGG":
                 return Material.EGG;
-            case SNOWBALL:
+            case "SNOWBALL":
                 return Material.SNOWBALL;
+            case "WIND_CHARGE":
+                return Material.valueOf("WIND_CHARGE");
             default:
                 return BukkitAdapter.ADAPTER.getFrameType(type);
         }
@@ -1421,7 +1484,7 @@ public class Util extends Queue {
 
     public static boolean isFolia() {
         try {
-            Class.forName("io.papermc.paper.threadedregions.ThreadedRegionizer");
+            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
         }
         catch (Exception e) {
             return false;
