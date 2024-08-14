@@ -2,7 +2,7 @@ import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
     id 'java'
-    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'com.gradleup.shadow' version '8.3.0'
     id 'com.palantir.git-version' version '0.13.0'
 }
 
@@ -11,8 +11,12 @@ String projectVersion = '22.4'
 String projectBranch = 'development'
 version = projectVersion // `version` might be modified, we don't always want that (e.g. plugin.yml)
 description = 'Provides block protection for your server.'
-sourceCompatibility = '17'
+sourceCompatibility = '21'
 compileJava.options.encoding = 'UTF-8'
+
+java.toolchain {
+    languageVersion = JavaLanguageVersion.of(21)
+}
 
 if (System.getenv("BUILD_NUMBER") != null) {
     // Being built in Jenkins, append Build ID
@@ -24,9 +28,11 @@ if (System.getenv("BUILD_NUMBER") != null) {
 logger.info("Building version $version")
 
 repositories {
+    mavenCentral()
     maven { url = 'https://hub.spigotmc.org/nexus/content/groups/public/' }
     maven { url = 'https://repo.papermc.io/repository/maven-public/' }
     maven { url = 'https://repo.codemc.org/repository/maven-public/' }
+    maven { url = 'https://maven.enginehub.org/repo/' }
 }
 
 dependencies {
@@ -34,8 +40,10 @@ dependencies {
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Core")
     compileOnly("com.fastasyncworldedit:FastAsyncWorldEdit-Bukkit")
     compileOnly 'io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT'
+    implementation 'org.apache.logging.log4j:log4j-core:2.23.1'
     implementation 'org.bstats:bstats-bukkit-lite:1.8'
     implementation 'com.zaxxer:HikariCP:5.0.1'
+    implementation 'org.jhardware:jHardware:0.8.6'
     implementation fileTree('lib') {include '*.jar'}
 }
 
